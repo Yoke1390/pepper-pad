@@ -1,0 +1,20 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# --- uv / venv ---
+.venv/
+
+# --- 参照用クローン（qibullet 等）: uv 依存で再現するためバージョン管理しない (plan.md §6) ---
+resources/
+
+# --- 生成物（動画・フレーム） ---
+outputs/
+
+# --- OS / editor ---
+.DS_Store
+.vscode/
+.idea/

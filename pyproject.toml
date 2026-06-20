@@ -1,0 +1,22 @@
+[project]
+name = "pepper-pad"
+version = "0.1.0"
+description = "Expressive null-space control of Pepper carrying a sphere (PAD-modulated)"
+readme = "README.md"
+authors = [
+    { name = "Yoke1390", email = "127005969+Yoke1390@users.noreply.github.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "imageio[ffmpeg]>=2.37.3",
+    "numpy>=2.4.6",
+    "pybullet>=3.2.7",
+    "qibullet>=1.4.6",
+]
+
+[project.scripts]
+pepper-pad = "pepper_pad:main"
+
+[build-system]
+requires = ["uv_build>=0.11.19,<0.12.0"]
+build-backend = "uv_build"

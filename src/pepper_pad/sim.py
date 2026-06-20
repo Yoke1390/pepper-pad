@@ -23,10 +23,10 @@ HAND_LINKS = ("l_hand", "r_hand")
 # 手の開き具合 (0=握る, 1=完全に開く)。球を支える「程よく開いた手」。
 HAND_OPENING = 1.0
 
-# 球は「台車座標に固定された点」に置く (両手中点ではない)。両手はその少し下を
-# 支えるので、球中心は手の中点より上にある。これは「球と台車の相対位置を固定」
-# という主タスク定義 (plan.md §3) とも一致する。
-HOLD_SPHERE_CENTER = (0.25, 0.0, 0.82)  # 台車座標での球の中心 (固定)
+# 球は両手で支えられ手と一緒に動く。球中心は両手中点から「少し上・前」へずらした点
+# (台車座標オフセット)。主タスク (plan.md §3) は球の左右中心(y)と高さ(z)だけを拘束し
+# 前後(x)は自由なので、球は手に追従して前後する。
+HOLD_SPHERE_OFFSET = (0.05, 0.0, 0.06)  # 両手中点 → 球中心 (台車座標)
 
 # 球を下から支える左右対称の保持姿勢 (rad)。
 # scripts/calibrate_hold.py のタスク優先 DLS IK で算出:
@@ -100,16 +100,17 @@ class PepperScene:
 
     # --- 球 ---
     def sphere_world_center(self) -> np.ndarray:
-        """台車座標で固定した球中心を、現在の台車(ベース)姿勢で world に変換。
-        台車が動いても球は台車に対し固定される。"""
-        base_pos, base_orn = p.getBasePositionAndOrientation(
+        """両手中点から台車座標オフセット (HOLD_SPHERE_OFFSET) だけずらした点を
+        球中心とする。球は手に追従する（主タスクが y,z を拘束、前後は自由）。"""
+        mid = self.hand_midpoint()  # world
+        _, base_orn = p.getBasePositionAndOrientation(
             self.model, physicsClientId=self.client)
-        world, _ = p.multiplyTransforms(base_pos, base_orn,
-                                        HOLD_SPHERE_CENTER, [0, 0, 0, 1])
-        return np.asarray(world)
+        off_world, _ = p.multiplyTransforms(
+            [0, 0, 0], base_orn, HOLD_SPHERE_OFFSET, [0, 0, 0, 1])
+        return mid + np.asarray(off_world)
 
     def spawn_sphere(self, rgba=(0.9, 0.3, 0.2, 1.0)) -> int:
-        """台車基準の固定点 (HOLD_SPHERE_CENTER) に直径25cmの球を生成
+        """両手中点の少し上・前 (HOLD_SPHERE_OFFSET) に直径25cmの球を生成
         (mass=0, キネマティック)。両手はその少し下を支える。"""
         col = p.createCollisionShape(
             p.GEOM_SPHERE, radius=SPHERE_RADIUS, physicsClientId=self.client)

@@ -1,6 +1,6 @@
 # pepper-pad
 
-Pepper が直径 50cm の球体を抱えて平面パスを辿るタスクで、**表現的ヌル空間制御 (expressive null-space control)** を実装し、PAD（Pleasure / Arousal / Dominance）で表情を変える実験。設計の詳細は [plan.md](plan.md) を参照。
+Pepper が直径 25cm の球体を抱えて平面パスを辿るタスクで、**表現的ヌル空間制御 (expressive null-space control)** を実装し、PAD（Pleasure / Arousal / Dominance）で表情を変える実験。設計の詳細は [plan.md](plan.md) を参照。
 
 ## セットアップ（uv）
 

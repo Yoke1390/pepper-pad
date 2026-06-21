@@ -23,6 +23,14 @@ def link_position(model: int, link_index: int, client: int) -> np.ndarray:
     return np.asarray(state[4])  # worldLinkFramePosition
 
 
+def link_com_position(model: int, link_index: int, client: int) -> np.ndarray:
+    """リンク重心(CoM)の world 位置 (getLinkState[0])。calculateJacobian の
+    localPosition=[0,0,0] が指す点と一致するので、ヤコビアン検証はこちらを使う。"""
+    state = p.getLinkState(model, link_index, computeForwardKinematics=True,
+                           physicsClientId=client)
+    return np.asarray(state[0])  # linkWorldPosition (CoM)
+
+
 def hand_jacobian(model: int, client: int, link_index: int,
                   movable: list[int], col_of: dict[int, int],
                   joint_global_idx: list[int]) -> tuple[np.ndarray, np.ndarray]:
@@ -41,6 +49,65 @@ def hand_linear_jacobian(model: int, client: int, link_index: int,
                          joint_global_idx: list[int]) -> np.ndarray:
     """並進ヤコビアンのみ (3 x len(joint_global_idx))。"""
     return hand_jacobian(model, client, link_index, movable, col_of, joint_global_idx)[0]
+
+
+# --- 緩和した球保持タスク x = [d(3), m_y, m_z] ∈ R^5 (台車座標系) ---
+# plan.md §3/§4 参照。d = p_L - p_R (把持維持3), m = (p_L+p_R)/2 の y(真正面),
+# z(一定高さ) を拘束。m_x(前後) は自由なので落とす。計測フレームは台車(base)。
+
+HOLD_TASK_DIM = 5
+
+
+def base_frame_point(model: int, client: int, p_world: np.ndarray) -> np.ndarray:
+    """world 座標の点を台車(base)座標へ変換する: R^T (p_world - base_pos)。
+    numpy で計算 (pybullet の invert/multiplyTransforms の量子化往復誤差 ~1e-8 を
+    避ける。これは有限差分検証で 2*eps による増幅で 1e-3 の見かけ誤差を生む)。
+    単位姿勢では R=I が厳密に出るので恒等変換になる。"""
+    base_pos, base_orn = p.getBasePositionAndOrientation(model, physicsClientId=client)
+    R = np.asarray(p.getMatrixFromQuaternion(base_orn)).reshape(3, 3)
+    return R.T @ (np.asarray(p_world) - np.asarray(base_pos))
+
+
+def holding_task_value(scene, hand_links: tuple[str, str] = ("l_hand", "r_hand"),
+                       ) -> np.ndarray:
+    """現在姿勢での緩和保持タスク x = [d_x, d_y, d_z, m_y, m_z] ∈ R^5 (台車座標)。"""
+    model, client = scene.model, scene.client
+    li_l = scene.pepper.getLink(hand_links[0]).getIndex()
+    li_r = scene.pepper.getLink(hand_links[1]).getIndex()
+    # CoM 基準 (calculateJacobian の localPosition=[0,0,0] と同じ点)。
+    pL = base_frame_point(model, client, link_com_position(model, li_l, client))
+    pR = base_frame_point(model, client, link_com_position(model, li_r, client))
+    d = pL - pR
+    m = 0.5 * (pL + pR)
+    return np.array([d[0], d[1], d[2], m[1], m[2]])
+
+
+def holding_task_jacobian(scene, joint_names: list[str],
+                          hand_links: tuple[str, str] = ("l_hand", "r_hand"),
+                          ) -> np.ndarray:
+    """緩和保持タスクのヤコビアン J = ∂x/∂q ∈ R^{5 x len(joint_names)} (台車座標)。
+
+    左右手先の world 並進ヤコビアン (calculateJacobian) を台車座標へ回転し、
+    d = p_L - p_R の3行と中点 m の y,z 行を積み上げる。台車(根リンク)は
+    制御関節で動かないので base 位置・姿勢の偏微分は 0、回転 R^T を掛けるだけ。"""
+    model, client = scene.model, scene.client
+    movable = movable_joint_indices(model, client)
+    col_of = {g: k for k, g in enumerate(movable)}
+    g_idx = [scene.pepper.getJoint(nm).getIndex() for nm in joint_names]
+    li_l = scene.pepper.getLink(hand_links[0]).getIndex()
+    li_r = scene.pepper.getLink(hand_links[1]).getIndex()
+
+    JL = hand_linear_jacobian(model, client, li_l, movable, col_of, g_idx)  # 3xn world
+    JR = hand_linear_jacobian(model, client, li_r, movable, col_of, g_idx)
+
+    _, base_orn = p.getBasePositionAndOrientation(model, physicsClientId=client)
+    R = np.asarray(p.getMatrixFromQuaternion(base_orn)).reshape(3, 3)
+    JLb = R.T @ JL  # 台車座標へ
+    JRb = R.T @ JR
+
+    Jd = JLb - JRb              # 把持維持 d の3行
+    Jm = 0.5 * (JLb + JRb)      # 中点 m の3行
+    return np.vstack([Jd, Jm[1:3, :]])  # [d_x,d_y,d_z, m_y,m_z] = 5xn
 
 
 def solve_arm_ik(scene, hand_link: str, arm_joint_names: list[str],

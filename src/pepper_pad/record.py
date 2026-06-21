@@ -16,20 +16,25 @@ from PIL import Image, ImageDraw, ImageFont
 from .sim import PepperScene
 from .controller import NullSpaceController
 from .pad import PADExpression, CTRL_JOINTS
-from .path import SCurvePath, apply_base_pose, base_height
+from .path import SCurvePath, apply_base_pose, base_height, draw_path_on_ground
 
-# 要求 PAD → 感情ラベル
-EMOTION = {
-    (0, 0, 0): "baseline (neutral)",
-    (1, 1, 1): "joy / excitement / confidence",
-    (-1, -1, -1): "sadness / fatigue / submission",
-    (-1, 1, -1): "anxiety / agitation / fear",
-    (-1, 1, 1): "anger / intimidation / tension",
+from tqdm import tqdm
+
+# 要求 PAD → 感情ラベル（短い主名 + 補足）
+EMOTION_SHORT = {
+    (0, 0, 0): "Neutral",
+    (1, 1, 1): "Joy",
+    (-1, -1, -1): "Sadness",
+    (-1, 1, -1): "Fear",
+    (-1, 1, 1): "Anger",
 }
-
-ROBOT_LINE = "Robot: SoftBank Pepper  (qibullet / PyBullet)"
-TASK_LINE = "Task: hold a 0.25 m sphere in front at constant height; follow a planar path"
-REDUN_LINE = "Null-space control: 13 joints - 5D task = 8 DoF redundancy"
+EMOTION = {
+    (0, 0, 0): "baseline",
+    (1, 1, 1): "excitement / confidence",
+    (-1, -1, -1): "fatigue / submission",
+    (-1, 1, -1): "anxiety / agitation",
+    (-1, 1, 1): "intimidation / tension",
+}
 
 
 def _font(size: int):
@@ -53,32 +58,31 @@ def grab_frame(scene, target, yaw: float, pitch: float, dist: float,
 
 
 def overlay_labels(frame: np.ndarray, pad, t: float, duration: float) -> np.ndarray:
-    """上部に説明帯、下部に PAD・感情ラベルを焼き込む。"""
+    """下部に PAD 値と感情ラベル(Joy など)だけを焼き込む。
+    ロボット/タスク等の説明は動画外で行う前提。"""
     img = Image.fromarray(frame).convert("RGBA")
     w, h = img.size
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    small = _font(15)
-    big = _font(24)
+    emo_font = _font(30)
+    pad_font = _font(24)
 
-    # 上部の説明帯
-    top_lines = [ROBOT_LINE, TASK_LINE, REDUN_LINE]
-    d.rectangle([0, 0, w, 4 + 19 * len(top_lines) + 4], fill=(0, 0, 0, 150))
-    for i, line in enumerate(top_lines):
-        d.text((8, 5 + 19 * i), line, font=small, fill=(255, 255, 255, 255))
-
-    # 下部の PAD・感情
     pad_t = tuple(int(v) for v in pad)
-    emo = EMOTION.get(pad_t, "")
+    emo_short = EMOTION_SHORT.get(pad_t, "")
     pad_str = f"PAD = [{pad_t[0]:+d}, {pad_t[1]:+d}, {pad_t[2]:+d}]"
-    d.rectangle([0, h - 40, w, h], fill=(0, 0, 0, 150))
-    d.text((8, h - 35), pad_str, font=big, fill=(255, 230, 120, 255))
-    tw = d.textlength(pad_str, font=big)
-    d.text((8 + tw + 16, h - 31), emo, font=small, fill=(220, 220, 220, 255))
+
+    band = 56
+    d.rectangle([0, h - band, w, h], fill=(0, 0, 0, 160))
+    # 左: 感情ラベル(大)
+    d.text((12, h - band + 13), emo_short, font=emo_font, fill=(255, 235, 130, 255))
+    # 右: PAD 値
+    pw = d.textlength(pad_str, font=pad_font)
+    d.text((w - pw - 12, h - band + 16), pad_str, font=pad_font,
+           fill=(255, 255, 255, 255))
 
     # 進捗バー
     frac = min(max(t / duration, 0.0), 1.0)
-    d.rectangle([0, h - 3, int(w * frac), h], fill=(255, 230, 120, 220))
+    d.rectangle([0, h - 3, int(w * frac), h], fill=(255, 235, 130, 220))
 
     out = Image.alpha_composite(img, layer).convert("RGB")
     return np.asarray(out)
@@ -87,7 +91,9 @@ def overlay_labels(frame: np.ndarray, pad, t: float, duration: float) -> np.ndar
 def record_clip(pad, out_path: str, *, path=None, duration: float = 8.0,
                 fps: int = 30, k_task: float = 10.0,
                 cam=(55.0, -18.0, 2.0), w: int = 640, h: int = 480,
-                verbose: bool = True) -> float:
+                verbose: bool = True, progress: bool = True,
+                position: int = 0, desc: str | None = None,
+                on_step=None) -> float:
     """1 つの PAD クリップを mp4 に録画。最大タスク誤差を返す。"""
     control_dt = 1.0 / 60.0
     stride = max(1, round(1.0 / (fps * control_dt)))   # 何制御ステップごとに1フレーム
@@ -97,6 +103,7 @@ def record_clip(pad, out_path: str, *, path=None, duration: float = 8.0,
     try:
         s.apply_hold_posture()
         s.spawn_sphere()
+        draw_path_on_ground(s, path)              # 軌跡を地面に表示
         ctrl = NullSpaceController(s, CTRL_JOINTS, k_task=k_task)
         expr = PADExpression(s, ctrl.read_q(), pad)
         z0 = base_height(s)
@@ -108,7 +115,12 @@ def record_clip(pad, out_path: str, *, path=None, duration: float = 8.0,
                                     quality=8, macro_block_size=16)
         max_err = 0.0
         try:
-            for i in range(steps + 1):
+            rng = range(steps + 1)
+            if progress:
+                rng = tqdm(rng, total=steps + 1, position=position,
+                           desc=(desc or os.path.basename(out_path)),
+                           leave=True, ncols=90)
+            for i in rng:
                 t = i * control_dt
                 x, y, yawb = path.pose(t)
                 apply_base_pose(s, x, y, yawb, z0)
@@ -119,6 +131,8 @@ def record_clip(pad, out_path: str, *, path=None, duration: float = 8.0,
                     mid = s.hand_midpoint()
                     frame = grab_frame(s, [x, y, mid[2]], yaw, pitch, dist, w, h)
                     writer.append_data(overlay_labels(frame, pad, t, duration))
+                if on_step is not None:    # 親プロセスへ進捗通知 (並列時)
+                    on_step()
         finally:
             writer.close()
         if verbose:

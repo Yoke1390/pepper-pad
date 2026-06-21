@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=2.4.6",
     "pybullet>=3.2.7",
     "qibullet>=1.4.6",
+    "tqdm>=4.68.3",
 ]
 
 [project.scripts]

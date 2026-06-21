@@ -3,6 +3,15 @@ revision = 3
 requires-python = ">=3.11"
 
 [[package]]
+name = "colorama"
+version = "0.4.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44", size = 27697, upload-time = "2022-10-25T02:36:22.414Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335, upload-time = "2022-10-25T02:36:20.889Z" },
+]
+
+[[package]]
 name = "imageio"
 version = "2.37.3"
 source = { registry = "https://pypi.org/simple" }
@@ -123,6 +132,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pybullet" },
     { name = "qibullet" },
+    { name = "tqdm" },
 ]
 
 [package.metadata]
@@ -131,6 +141,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.4.6" },
     { name = "pybullet", specifier = ">=3.2.7" },
     { name = "qibullet", specifier = ">=1.4.6" },
+    { name = "tqdm", specifier = ">=4.68.3" },
 ]
 
 [[package]]
@@ -268,4 +279,16 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/21/db/d0682eaf0833952681cbfec89f2b86e2bab5d3efcafec15fb354e7048844/qibullet-1.4.6.tar.gz", hash = "sha256:88b1ccf77b82d317e4ad21f6f054f8731f65e4b06087e04ba01b02e3e3d03614", size = 5721212, upload-time = "2022-12-30T10:50:58.736Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c5/54/ed020b1d74cabaaf637423af073e086290b3761edfd5f91c71d609c65178/qibullet-1.4.6-py3-none-any.whl", hash = "sha256:8f4a24be3b36aff6166ca8ba68e3ab2c5342ea5f25069ae8a18e9b9294e6170e", size = 5765473, upload-time = "2022-12-30T10:50:56.994Z" },
+]
+
+[[package]]
+name = "tqdm"
+version = "4.68.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/87/d7/0535a28b1f5f24f6612fb3ff1e89fb1a8d160fee0f976e0aa6803862134b/tqdm-4.68.3.tar.gz", hash = "sha256:00dfa48452b6b6cfae3dd9885636c23d3422d1ec97c66d96818cbd5e0821d482", size = 170596, upload-time = "2026-06-17T07:36:52.105Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d8/8e/bb97bb0c71802080bfc8952937d174e49cfc50de5c951dd47b2496f0dcdb/tqdm-4.68.3-py3-none-any.whl", hash = "sha256:39832cc2def2789a6f29df83f172db7416cea70052c0907a57801c5f2fdccb03", size = 78337, upload-time = "2026-06-17T07:36:50.132Z" },
 ]

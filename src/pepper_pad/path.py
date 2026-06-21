@@ -83,6 +83,22 @@ class CirclePath(PlanarPath):
         return float(x), float(y), yaw
 
 
+def draw_path_on_ground(scene, path: PlanarPath, *, n: int = 48,
+                        radius: float = 0.03, z: float = 0.006,
+                        color=(0.10, 0.75, 0.35, 1.0)) -> list[int]:
+    """パスを地面に点列(薄い円盤)として可視化する。質量0・衝突なしの純粋な
+    ビジュアルなので物理に干渉しない。台車が辿る軌跡が画面に映る。"""
+    vis = p.createVisualShape(p.GEOM_CYLINDER, radius=radius, length=0.01,
+                              rgbaColor=color, physicsClientId=scene.client)
+    ids = []
+    for i in range(n + 1):
+        x, y, _ = path.pose(path.duration * i / n)
+        ids.append(p.createMultiBody(
+            baseMass=0.0, baseCollisionShapeIndex=-1, baseVisualShapeIndex=vis,
+            basePosition=[x, y, z], physicsClientId=scene.client))
+    return ids
+
+
 def apply_base_pose(scene, x: float, y: float, yaw: float, z0: float) -> None:
     """台車(base)を world 姿勢 (x, y, yaw) へ即時設定。z は接地高 z0 を保つ。"""
     orn = p.getQuaternionFromEuler([0.0, 0.0, yaw])
